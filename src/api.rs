@@ -8,9 +8,10 @@ use mlua::prelude::{
     LuaResult,
     LuaTable,
     LuaValue,
+    LuaVariadic,
 };
 
-use crate::util::log;
+use crate::util::{launch, log};
 
 pub const API_VERSION: u32 = 0;
 
@@ -86,6 +87,19 @@ pub fn new_lua() -> Lua {
         "log",
         |_lua, (msg, lvl): (String, f64)| {
             log(&msg, lvl.trunc() as i32);
+            Ok(())
+        },
+    );
+    injectf(
+        &lua,
+        &globals,
+        "app",
+        |_lua, (program, args): (String, LuaVariadic<String>)| {
+            let args: Vec<String> =
+                args.into_iter().collect();
+            log(&format!("launching: {program}"), 1);
+            launch(&program, &args)
+                .map_err(mlua::Error::external)?;
             Ok(())
         },
     );

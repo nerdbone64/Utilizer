@@ -1,5 +1,5 @@
 use colored::{Color, Colorize};
-use std::{fs::OpenOptions, io::Write, path::PathBuf};
+use std::{fs::OpenOptions, io::{self, Write}, path::PathBuf, process::{Command, Stdio}};
 
 pub fn root_dir() -> PathBuf {
     std::env::current_exe()
@@ -25,4 +25,41 @@ pub fn log(msg: &str, level: i32) {
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(file, "[{lvl}]: {msg}");
     }
+}
+
+#[cfg(windows)]
+fn configure_detached(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const DETACHED_PROCESS: u32 = 0x00000008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+    command.creation_flags(
+        DETACHED_PROCESS |
+        CREATE_NEW_PROCESS_GROUP
+    );
+}
+
+#[cfg(unix)]
+fn configure_detached(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {return Err(io::Error::last_os_error());}
+            Ok(())
+        });
+    }
+}
+
+pub fn launch(
+    program: &str,
+    args: &[String],
+) -> io::Result<()> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    configure_detached(&mut command);
+    command.spawn()?;
+    Ok(())
 }
